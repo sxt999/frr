@@ -285,7 +285,7 @@ vxlan_status(int s, struct interface *ifp)
 	struct zebra_if *zebra_if;
 
 	bzero(&cfg, sizeof(cfg));
-	zebra_if = ifp->info
+	zebra_if = ifp->info;
 
 	if (do_cmd(s, VXLAN_CMD_GET_CONFIG, &cfg, sizeof(cfg), 0, ifp->name) < 0)
 		return;
