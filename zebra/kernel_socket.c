@@ -285,7 +285,7 @@ vxlan_status(int s, struct zebra_if *zebra_if, const char *ifr_name)
 
 	bzero(&cfg, sizeof(cfg));
 
-	if (do_cmd(s, VXLAN_CMD_GET_CONFIG, &cfg, sizeof(cfg), 0) < 0, ifr_name)
+	if (do_cmd(s, VXLAN_CMD_GET_CONFIG, &cfg, sizeof(cfg), 0, ifr_name) < 0)
 		return;
 
 	vni = cfg.vxlc_vni;
