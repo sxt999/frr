@@ -756,6 +756,11 @@ int ifm_read(struct if_msghdr *ifm)
 #endif /* __bsdi__ */
 		if_get_metric(ifp);
 
+#ifdef __FreeBSD__
+		s = socket(AF_LOCAL, SOCK_DGRAM, 0);
+		vxlan_status(s, (struct zebra_if *)ifp->info);
+		close(s);
+#endif /* get vtep information */
 		/*
 		 * XXX sockaddr_dl contents can be larger than the structure
 		 * definition.  There are 2 big families here:
@@ -834,6 +839,11 @@ int ifm_read(struct if_msghdr *ifm)
 			if_get_mtu(ifp);
 #endif /* __bsdi__ */
 			if_get_metric(ifp);
+#ifdef __FreeBSD__
+		s = socket(AF_LOCAL, SOCK_DGRAM, 0);
+		vxlan_status(s, (struct zebra_if *)ifp->info);
+		close(s);
+#endif /* get vtep information */
 		}
 	}
 
@@ -847,11 +857,7 @@ int ifm_read(struct if_msghdr *ifm)
 			zlog_debug("%s: interface %s index %d", __func__,
 				   ifp->name, ifp->ifindex);
 
-#ifdef __FreeBSD__
-		s = socket(AF_LOCAL, SOCK_DGRAM, 0);
-		vxlan_status(s, (struct zebra_if *)ifp->info);
-		close(s);
-#endif /* get vtep information */
+
 	}
 
 	return 0;
