@@ -274,7 +274,7 @@ do_cmd(int sock, u_long op, void *arg, size_t argsize, int set, const char *ifr_
 
 /* modified from /usr/src/sbin/ifconfig/if_vxlan.c */
 static void
-vxlan_status(int s, struct zebra_if *zebra_if, const char *ifr_name)
+vxlan_status(int s, struct interface *ifp)
 {
 	struct ifvxlancfg cfg;
 	char src[NI_MAXHOST], dst[NI_MAXHOST];
@@ -282,10 +282,12 @@ vxlan_status(int s, struct zebra_if *zebra_if, const char *ifr_name)
 	struct sockaddr *lsa, *rsa;
 	int vni, mc, ipv6 = 0;
 	struct zebra_l2info_vxlan *vxlan_info;
+	struct zebra_if *zebra_if;
 
 	bzero(&cfg, sizeof(cfg));
+	zebra_if = ifp->info
 
-	if (do_cmd(s, VXLAN_CMD_GET_CONFIG, &cfg, sizeof(cfg), 0, ifr_name) < 0)
+	if (do_cmd(s, VXLAN_CMD_GET_CONFIG, &cfg, sizeof(cfg), 0, ifp->name) < 0)
 		return;
 
 	vni = cfg.vxlc_vni;
@@ -758,7 +760,7 @@ int ifm_read(struct if_msghdr *ifm)
 
 #ifdef __FreeBSD__
 		s = socket(AF_LOCAL, SOCK_DGRAM, 0);
-		vxlan_status(s, (struct zebra_if *)ifp->info, ifname);
+		vxlan_status(s, ifp);
 		close(s);
 #endif /* get vtep information */
 		/*
@@ -841,7 +843,7 @@ int ifm_read(struct if_msghdr *ifm)
 			if_get_metric(ifp);
 #ifdef __FreeBSD__
 		s = socket(AF_LOCAL, SOCK_DGRAM, 0);
-		vxlan_status(s, (struct zebra_if *)ifp->info, ifname);
+		vxlan_status(s, ifp);
 		close(s);
 #endif /* get vtep information */
 		}
