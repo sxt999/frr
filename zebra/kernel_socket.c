@@ -49,6 +49,27 @@
 #include "zebra/zebra_errors.h"
 #include "zebra/zebra_ptm.h"
 
+#ifdef __FreeBSD__
+
+#include <sys/ioctl.h>
+#include <stdio.h>
+#include <sys/socket.h>
+#include <sys/sockio.h>
+#include <sys/param.h>
+#include <sys/cdefs.h>
+#include <net/ethernet.h>
+#include <net/if.h>
+#include <net/if_vxlan.h>
+#include <net/route.h>
+#include <netinet/in.h>
+
+#include <ctype.h>
+#include <strings.h>
+#include <netdb.h>
+#include <unistd.h>
+
+#endif
+
 extern struct zebra_privs_t zserv_privs;
 
 /*
@@ -232,6 +253,84 @@ size_t rta_get(caddr_t sap, void *dest, size_t destlen);
 size_t rta_getattr(caddr_t sap, void *destp, size_t destlen);
 size_t rta_getsdlname(caddr_t sap, void *dest, short *destlen);
 const char *rtatostr(unsigned int flags, char *buf, size_t buflen);
+
+#ifdef __FreeBSD__
+
+/* copy from /usr/src/sbin/ifconfig/if_vxlan.c */
+static int
+do_cmd(int sock, u_long op, void *arg, size_t argsize, int set)
+{
+	struct ifdrv ifd;
+
+	bzero(&ifd, sizeof(ifd));
+
+	strlcpy(ifd.ifd_name, ifr_name, sizeof(ifd.ifd_name));
+	ifd.ifd_cmd = op;
+	ifd.ifd_len = argsize;
+	ifd.ifd_data = arg;
+
+	return (ioctl(sock, set ? SIOCSDRVSPEC : SIOCGDRVSPEC, &ifd));
+}
+
+/* modified from /usr/src/sbin/ifconfig/if_vxlan.c */
+static void
+vxlan_status(int s, struct zebra_if *zebra_if)
+{
+	struct ifvxlancfg cfg;
+	char src[NI_MAXHOST], dst[NI_MAXHOST];
+	char srcport[NI_MAXSERV], dstport[NI_MAXSERV];
+	struct sockaddr *lsa, *rsa;
+	int vni, mc, ipv6 = 0;
+	struct zebra_l2info_vxlan *vxlan_info;
+
+	bzero(&cfg, sizeof(cfg));
+
+	if (do_cmd(s, VXLAN_CMD_GET_CONFIG, &cfg, sizeof(cfg), 0) < 0)
+		return;
+
+	vni = cfg.vxlc_vni;
+	lsa = &cfg.vxlc_local_sa.sa;
+	rsa = &cfg.vxlc_remote_sa.sa;
+	ipv6 = rsa->sa_family == AF_INET6;
+
+	/* Just report nothing if the network identity isn't set yet. */
+	if (vni >= VXLAN_VNI_MAX)
+		return;
+
+	/* bypass ipv6 */
+	if (ipv6)
+		return;
+
+	if (getnameinfo(lsa, lsa->sa_len, src, sizeof(src),
+	    srcport, sizeof(srcport), NI_NUMERICHOST | NI_NUMERICSERV) != 0)
+		src[0] = srcport[0] = '\0';
+	if (getnameinfo(rsa, rsa->sa_len, dst, sizeof(dst),
+	    dstport, sizeof(dstport), NI_NUMERICHOST | NI_NUMERICSERV) != 0)
+		dst[0] = dstport[0] = '\0';
+
+	if (!ipv6) {
+		struct sockaddr_in *sin = (struct sockaddr_in *)rsa;
+		mc = IN_MULTICAST(ntohl(sin->sin_addr.s_addr));
+	} else {
+		struct sockaddr_in6 *sin6 = (struct sockaddr_in6 *)rsa;
+		mc = IN6_IS_ADDR_MULTICAST(&sin6->sin6_addr);
+	}
+
+	zebra_if->zif_type = ZEBRA_IF_VXLAN;
+
+	vxlan_info = &zebra_if->l2info.vxl;
+	vxlan_info->vni = vni;
+	/* FreeBSD only has default ns */
+	vxlan_info->link_nsid = NS_DEFAULT;
+
+	inet_aton(src, &vxlan_info->vtep_ip);
+
+	if (mc)
+		inet_aton(dst, &vxlan_info->mcast_grp);
+
+}
+
+#endif
 
 /* Supported address family check. */
 static inline int af_check(int family)
@@ -524,7 +623,9 @@ int ifm_read(struct if_msghdr *ifm)
 	int maskbit;
 	caddr_t cp;
 	char fbuf[64];
-
+#ifdef __FreeBSD__
+	int s;
+#endif
 	/* terminate ifname at head (for strnlen) and tail (for safety) */
 	ifname[IFNAMSIZ - 1] = '\0';
 
@@ -745,6 +846,12 @@ int ifm_read(struct if_msghdr *ifm)
 		if (IS_ZEBRA_DEBUG_KERNEL)
 			zlog_debug("%s: interface %s index %d", __func__,
 				   ifp->name, ifp->ifindex);
+
+#ifdef __FreeBSD__
+		s = socket(AF_LOCAL, SOCK_DGRAM, 0);
+		vxlan_status(s, (struct zebra_if *)ifp->info);
+		close(s);
+#endif /* get vtep information */
 	}
 
 	return 0;
