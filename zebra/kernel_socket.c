@@ -53,6 +53,7 @@
 
 #include <sys/ioctl.h>
 #include <stdio.h>
+#include <sys/types.h>
 #include <sys/socket.h>
 #include <sys/sockio.h>
 #include <sys/param.h>
@@ -60,13 +61,15 @@
 #include <net/ethernet.h>
 #include <net/if.h>
 #include <net/if_vxlan.h>
+
 #include <net/route.h>
 #include <netinet/in.h>
-
+#include <net/if_bridgevar.h>
 #include <ctype.h>
 #include <strings.h>
 #include <netdb.h>
 #include <unistd.h>
+#include <ifaddrs.h>
 
 #endif
 
@@ -330,6 +333,132 @@ vxlan_status(int s, struct interface *ifp)
 	if (mc)
 		inet_aton(dst, &vxlan_info->mcast_grp);
 
+}
+
+/* modified from /usr/src/sbin/ifconfig/if_bridge.c */
+static void
+bridge_interfaces(int s, struct interface *ifp, struct zebra_ns *zns)
+{
+	struct ifbifconf bifc;
+	struct ifbreq *req;
+	char *inbuf = NULL, *ninbuf;
+	char *p;
+	int i, len = 8192;
+	struct route_node *rn1;
+	struct interface *ifp1;
+	struct zebra_if *zif;
+
+	for (;;) {
+		ninbuf = realloc(inbuf, len);
+		if (ninbuf == NULL)
+			err(1, "unable to allocate interface buffer");
+		bifc.ifbic_len = len;
+		bifc.ifbic_buf = inbuf = ninbuf;
+		if (do_cmd(s, BRDGGIFS, &bifc, sizeof(bifc), 0, ifp->name) < 0)
+			err(1, "unable to get interface list");
+		if ((bifc.ifbic_len + sizeof(*req)) < len)
+			break;
+		len *= 2;
+	}
+
+	for (i = 0; i < bifc.ifbic_len / sizeof(*req); i++) {
+		req = bifc.ifbic_req + i;
+		for (rn1 = route_top(zns->if_table); rn1; rn1 = route_next(rn1)) {
+			ifp1 = (struct interface *)rn1->info;
+
+			if (!ifp)
+				continue;
+			if (strcmp(ifp1->name, req->ifbr_ifsname)) {
+				zif = ifp->info;
+				zif->zif_slave_type = ZEBRA_IF_SLAVE_BRIDGE;
+				zif->brslave_info.br_if = ifp;
+				zif->brslave_info.ns_id = NS_DEFAULT;
+				zif->brslave_info.bridge_ifindex = ifp->ifindex;
+			}
+		}
+	}
+	free(inbuf);
+}
+
+/* modified from /usr/src/sbin/ifconfig/if_bridge.c */
+static void
+bridge_status(int s, struct interface *ifp)
+{
+	struct ifbropreq ifbp;
+	struct ifbrparam param;
+	u_int16_t pri;
+	u_int8_t ht, fd, ma, hc, pro;
+	u_int8_t lladdr[ETHER_ADDR_LEN];
+	u_int16_t bprio;
+	u_int32_t csize, ctime;
+	struct zebra_if *zebra_if;
+	struct zebra_l2info_bridge *bridge_info;
+
+	if (do_cmd(s, BRDGGCACHE, &param, sizeof(param), 0, ifp->name) < 0)
+		return;
+	csize = param.ifbrp_csize;
+	if (do_cmd(s, BRDGGTO, &param, sizeof(param), 0, ifp->name) < 0)
+		return;
+	ctime = param.ifbrp_ctime;
+	if (do_cmd(s, BRDGPARAM, &ifbp, sizeof(ifbp), 0, ifp->name) < 0)
+		return;
+
+	zebra_if = ifp->info;
+	zebra_if->zif_type = ZEBRA_IF_BRIDGE;
+	bridge_info = &zebra_if->l2info.br;
+	bridge_info->vlan_aware = 0; /* default is false */
+
+	return;
+
+}
+
+static int bridge_membership_create(struct ns *ns,
+				     void *param_in __attribute__((unused)),
+				     void **param_out __attribute__((unused)))
+{
+	struct zebra_ns *zns = ns->info;
+	struct route_node *rn1;
+	struct interface *ifp1;
+	struct zebra_if *zif;
+	int s;
+
+	zvrf = zebra_vrf_get_evpn();
+
+	if (!zvrf)
+		return NS_WALK_STOP;
+
+	s = socket(AF_LOCAL, SOCK_DGRAM, 0);
+
+	for (rn1 = route_top(zns->if_table); rn1; rn1 = route_next(rn1)) {
+		ifp1 = (struct interface *)rn1->info;
+
+		if (!ifp1)
+			continue;
+		zif = ifp1->info;
+		if (!zif || zif->zif_type != ZEBRA_IF_BRIDGE) {
+			if (zif->zif_slave_type == ZEBRA_IF_SLAVE_BRIDGE)
+				zif->zif_slave_type = ZEBRA_IF_SLAVE_NONE;
+		}	
+	}
+
+	for (rn1 = route_top(zns->if_table); rn1; rn1 = route_next(rn1)) {
+		ifp1 = (struct interface *)rn1->info;
+
+		if (!ifp1)
+			continue;
+		zif = ifp1->info;
+		if (!zif || zif->zif_type != ZEBRA_IF_BRIDGE)
+			continue;
+	}
+	close(s);
+
+}
+
+static void build_freebsd_bridge_membership(void)
+{
+	ns_walk_func(bridge_membership_create,
+		     (void *)NULL,
+		     (void **)NULL);
 }
 
 #endif
@@ -761,6 +890,7 @@ int ifm_read(struct if_msghdr *ifm)
 #ifdef __FreeBSD__
 		s = socket(AF_LOCAL, SOCK_DGRAM, 0);
 		vxlan_status(s, ifp);
+		bridge_status(s, ifp);
 		close(s);
 #endif /* get vtep information */
 		/*
@@ -844,6 +974,7 @@ int ifm_read(struct if_msghdr *ifm)
 #ifdef __FreeBSD__
 		s = socket(AF_LOCAL, SOCK_DGRAM, 0);
 		vxlan_status(s, ifp);
+		bridge_status(s, ifp);
 		close(s);
 #endif /* get vtep information */
 		}
@@ -1510,6 +1641,9 @@ static int kernel_read(struct thread *thread)
 		break;
 	case RTM_IFINFO:
 		ifm_read(&buf.im.ifm);
+#ifdef __FreeBSD__
+		build_freebsd_bridge_membership();
+#endif
 		break;
 	case RTM_NEWADDR:
 	case RTM_DELADDR:
