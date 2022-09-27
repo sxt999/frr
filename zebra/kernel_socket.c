@@ -986,6 +986,9 @@ int ifm_read(struct if_msghdr *ifm)
 
 
 	}
+#ifdef __FreeBSD__
+	build_freebsd_bridge_membership();
+#endif
 
 	return 0;
 }
@@ -1635,9 +1638,6 @@ static int kernel_read(struct thread *thread)
 		break;
 	case RTM_IFINFO:
 		ifm_read(&buf.im.ifm);
-#ifdef __FreeBSD__
-		build_freebsd_bridge_membership();
-#endif
 		break;
 	case RTM_NEWADDR:
 	case RTM_DELADDR:
