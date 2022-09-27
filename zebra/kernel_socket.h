@@ -40,6 +40,9 @@ extern int ifm_read(struct if_msghdr *);
 extern int rtm_write(int, union sockunion *, union sockunion *,
 		     union sockunion *, union sockunion *, unsigned int,
 		     enum blackhole_type, int);
+#ifdef __FreeBSD__
+extern static void build_freebsd_bridge_membership(void);
+#endif
 extern const struct message rtm_type_str[];
 
 #ifdef __cplusplus

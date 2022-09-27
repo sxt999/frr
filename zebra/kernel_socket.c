@@ -365,7 +365,7 @@ bridge_interfaces(int s, struct interface *ifp, struct zebra_ns *zns)
 		for (rn1 = route_top(zns->if_table); rn1; rn1 = route_next(rn1)) {
 			ifp1 = (struct interface *)rn1->info;
 
-			if (!ifp)
+			if (!ifp1)
 				continue;
 			if (strcmp(ifp1->name, req->ifbr_ifsname)) {
 				zif = ifp->info;
@@ -986,9 +986,6 @@ int ifm_read(struct if_msghdr *ifm)
 
 
 	}
-#ifdef __FreeBSD__
-	build_freebsd_bridge_membership();
-#endif
 
 	return 0;
 }
@@ -1638,6 +1635,9 @@ static int kernel_read(struct thread *thread)
 		break;
 	case RTM_IFINFO:
 		ifm_read(&buf.im.ifm);
+#ifdef __FreeBSD__
+		build_freebsd_bridge_membership();
+#endif
 		break;
 	case RTM_NEWADDR:
 	case RTM_DELADDR:

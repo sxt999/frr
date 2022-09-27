@@ -138,6 +138,9 @@ void interface_list(struct zebra_ns *zns)
 			break;
 		}
 	}
+#ifdef __FreeBSD__
+	build_freebsd_bridge_membership();
+#endif
 
 	/* Free sysctl buffer. */
 	XFREE(MTYPE_TMP, ref);
