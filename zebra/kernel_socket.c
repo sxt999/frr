@@ -448,7 +448,7 @@ static int bridge_membership_create(struct ns *ns,
 
 }
 
-static void build_freebsd_bridge_membership(void)
+void build_freebsd_bridge_membership(void)
 {
 	ns_walk_func(bridge_membership_create,
 		     (void *)NULL,
