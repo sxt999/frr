@@ -1042,8 +1042,10 @@ static int zevpn_build_hash_table_zns(struct ns *ns,
 				 * Inform BGP if intf is up and mapped to
 				 * bridge.
 				 */
+#ifndef __FreeBSD__
 				if (if_is_operative(ifp) &&
 					zif->brslave_info.br_if)
+#endif /* we dont want to map vxlan to bridge sometimes */
 					zebra_evpn_send_add_to_client(zevpn);
 			}
 		}
