@@ -342,7 +342,6 @@ bridge_interfaces(int s, struct interface *ifp, struct zebra_ns *zns)
 	struct ifbifconf bifc;
 	struct ifbreq *req;
 	char *inbuf = NULL, *ninbuf;
-	char *p;
 	int i, len = 8192;
 	struct route_node *rn1;
 	struct interface *ifp1;
@@ -351,11 +350,11 @@ bridge_interfaces(int s, struct interface *ifp, struct zebra_ns *zns)
 	for (;;) {
 		ninbuf = realloc(inbuf, len);
 		if (ninbuf == NULL)
-			err(1, "unable to allocate interface buffer");
+			return;
 		bifc.ifbic_len = len;
 		bifc.ifbic_buf = inbuf = ninbuf;
 		if (do_cmd(s, BRDGGIFS, &bifc, sizeof(bifc), 0, ifp->name) < 0)
-			err(1, "unable to get interface list");
+			return;
 		if ((bifc.ifbic_len + sizeof(*req)) < len)
 			break;
 		len *= 2;
@@ -386,20 +385,13 @@ bridge_status(int s, struct interface *ifp)
 {
 	struct ifbropreq ifbp;
 	struct ifbrparam param;
-	u_int16_t pri;
-	u_int8_t ht, fd, ma, hc, pro;
-	u_int8_t lladdr[ETHER_ADDR_LEN];
-	u_int16_t bprio;
-	u_int32_t csize, ctime;
 	struct zebra_if *zebra_if;
 	struct zebra_l2info_bridge *bridge_info;
 
 	if (do_cmd(s, BRDGGCACHE, &param, sizeof(param), 0, ifp->name) < 0)
 		return;
-	csize = param.ifbrp_csize;
 	if (do_cmd(s, BRDGGTO, &param, sizeof(param), 0, ifp->name) < 0)
 		return;
-	ctime = param.ifbrp_ctime;
 	if (do_cmd(s, BRDGPARAM, &ifbp, sizeof(ifbp), 0, ifp->name) < 0)
 		return;
 
