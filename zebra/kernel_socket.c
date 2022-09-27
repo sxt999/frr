@@ -442,6 +442,7 @@ static int bridge_membership_create(struct ns *ns,
 		zif = ifp1->info;
 		if (!zif || zif->zif_type != ZEBRA_IF_BRIDGE)
 			continue;
+		bridge_interfaces(s, ifp1, zns);
 	}
 	close(s);
 
