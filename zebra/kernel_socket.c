@@ -367,7 +367,7 @@ bridge_interfaces(int s, struct interface *ifp, struct zebra_ns *zns)
 
 			if (!ifp1)
 				continue;
-			if (strcmp(ifp1->name, req->ifbr_ifsname)) {
+			if (strcmp(ifp1->name, req->ifbr_ifsname) == 0) {
 				zif = ifp->info;
 				zif->zif_slave_type = ZEBRA_IF_SLAVE_BRIDGE;
 				zif->brslave_info.br_if = ifp;
