@@ -420,6 +420,7 @@ static int bridge_membership_create(struct ns *ns,
 	struct route_node *rn1;
 	struct interface *ifp1;
 	struct zebra_if *zif;
+	struct zebra_vrf *zvrf;
 	int s;
 
 	zvrf = zebra_vrf_get_evpn();
