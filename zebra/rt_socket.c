@@ -42,6 +42,26 @@
 #include "zebra/zebra_mpls.h"
 #include "zebra/zebra_errors.h"
 
+#include <sys/ioctl.h>
+#include <stdio.h>
+#include <sys/types.h>
+#include <sys/socket.h>
+#include <sys/sockio.h>
+#include <sys/param.h>
+#include <sys/cdefs.h>
+#include <net/ethernet.h>
+#include <net/if.h>
+#include <net/if_vxlan.h>
+
+#include <net/route.h>
+#include <netinet/in.h>
+#include <net/if_bridgevar.h>
+#include <ctype.h>
+#include <strings.h>
+#include <netdb.h>
+#include <unistd.h>
+#include <ifaddrs.h>
+
 extern struct zebra_privs_t zserv_privs;
 
 #ifdef __OpenBSD__
@@ -375,9 +395,65 @@ int kernel_neigh_update(int add, int ifindex, void *addr, char *lla, int llalen,
 	return 0;
 }
 
+static int
+do_cmd(int sock, u_long op, void *arg, size_t argsize, int set, char *ifname)
+{
+	struct ifdrv ifd;
+
+	bzero(&ifd, sizeof(ifd));
+
+	strlcpy(ifd.ifd_name, ifname, sizeof(ifd.ifd_name));
+	ifd.ifd_cmd = op;
+	ifd.ifd_len = argsize;
+	ifd.ifd_data = arg;
+
+	return (ioctl(sock, set ? SIOCSDRVSPEC : SIOCGDRVSPEC, &ifd));
+}
+
 /* NYI on routing-socket platforms, but we've always returned 'success'... */
 enum zebra_dplane_result kernel_neigh_update_ctx(struct zebra_dplane_ctx *ctx)
 {
+	if (dplane_ctx_get_op(ctx) != DPLANE_OP_VTEP_ADD && dplane_ctx_get_op(ctx) != DPLANE_OP_VTEP_DELETE)
+		return ZEBRA_DPLANE_REQUEST_SUCCESS;
+
+	struct ifvxlancmd cmd;
+	uint8_t mac_addr[ETHER_ADDR_LEN] = {0};
+	struct ipaddr *ip;
+	struct sockaddr_in sa;
+	struct sockaddr_in6 sa6;
+	int s;
+	
+	bzero(&cmd, sizeof(cmd));
+
+	for (int i=0; i<6; i++){
+		cmd.vxlcmd_mac[i] = mac_addr[i];
+	}
+
+	ip = dplane_ctx_neigh_get_ipaddr(ctx);
+
+	if (IS_IPADDR_V4(ip)) {
+		if (IN_MULTICAST(ntohl(ip->ip._v4_addr.s_addr)))
+			return ZEBRA_DPLANE_REQUEST_SUCCESS;
+		sa.sin_addr = ip->ip._v4_addr;
+		sa.sin_family = AF_INET;
+		cmd.vxlcmd_sa.in4 = sa;
+	}
+	if (IS_IPADDR_V6(ip)) {
+		if (IN6_IS_ADDR_MULTICAST(ntohl(ip->ip._v6_addr)))
+			return ZEBRA_DPLANE_REQUEST_SUCCESS;
+		sa6.sin6_addr = ip->ip._v6_addr;
+		sa6.sin6_family = AF_INET6;
+		cmd.vxlcmd_sa.in6 = sa6;
+	}
+
+	s = socket(AF_LOCAL, SOCK_DGRAM, 0);
+	if (dplane_ctx_get_op(ctx) == DPLANE_OP_VTEP_ADD) {
+		do_cmd(s, VXLAN_CMD_FTABLE_ENTRY_ADD, &cmd, sizeof(cmd), 1, ctx->zd_ifname);
+	}
+	if (dplane_ctx_get_op(ctx) == DPLANE_OP_VTEP_DELETE) {
+		do_cmd(s, VXLAN_CMD_FTABLE_ENTRY_REM, &cmd, sizeof(cmd), 1, ctx->zd_ifname);
+	}
+	close(s);
 	return ZEBRA_DPLANE_REQUEST_SUCCESS;
 }
 
