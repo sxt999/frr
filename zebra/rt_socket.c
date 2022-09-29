@@ -439,7 +439,7 @@ enum zebra_dplane_result kernel_neigh_update_ctx(struct zebra_dplane_ctx *ctx)
 		cmd.vxlcmd_sa.in4 = sa;
 	}
 	if (IS_IPADDR_V6(ip)) {
-		if (IN6_IS_ADDR_MULTICAST(ntohl(ip->ip._v6_addr)))
+		if (IN6_IS_ADDR_MULTICAST(&ip->ip._v6_addr))
 			return ZEBRA_DPLANE_REQUEST_SUCCESS;
 		sa6.sin6_addr = ip->ip._v6_addr;
 		sa6.sin6_family = AF_INET6;
@@ -448,10 +448,10 @@ enum zebra_dplane_result kernel_neigh_update_ctx(struct zebra_dplane_ctx *ctx)
 
 	s = socket(AF_LOCAL, SOCK_DGRAM, 0);
 	if (dplane_ctx_get_op(ctx) == DPLANE_OP_VTEP_ADD) {
-		do_cmd(s, VXLAN_CMD_FTABLE_ENTRY_ADD, &cmd, sizeof(cmd), 1, ctx->zd_ifname);
+		do_cmd(s, VXLAN_CMD_FTABLE_ENTRY_ADD, &cmd, sizeof(cmd), 1, dplane_ctx_get_ifname(ctx));
 	}
 	if (dplane_ctx_get_op(ctx) == DPLANE_OP_VTEP_DELETE) {
-		do_cmd(s, VXLAN_CMD_FTABLE_ENTRY_REM, &cmd, sizeof(cmd), 1, ctx->zd_ifname);
+		do_cmd(s, VXLAN_CMD_FTABLE_ENTRY_REM, &cmd, sizeof(cmd), 1, dplane_ctx_get_ifname(ctx));
 	}
 	close(s);
 	return ZEBRA_DPLANE_REQUEST_SUCCESS;
