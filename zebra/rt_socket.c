@@ -399,6 +399,7 @@ static int
 do_cmd(int sock, u_long op, void *arg, size_t argsize, int set, char *ifname)
 {
 	struct ifdrv ifd;
+	int res;
 
 	bzero(&ifd, sizeof(ifd));
 
@@ -407,7 +408,10 @@ do_cmd(int sock, u_long op, void *arg, size_t argsize, int set, char *ifname)
 	ifd.ifd_len = argsize;
 	ifd.ifd_data = arg;
 
-	return (ioctl(sock, set ? SIOCSDRVSPEC : SIOCGDRVSPEC, &ifd));
+	res = ioctl(sock, set ? SIOCSDRVSPEC : SIOCGDRVSPEC, &ifd);
+	printf("%d\n", res);
+
+	return (res);
 }
 
 /* NYI on routing-socket platforms, but we've always returned 'success'... */
