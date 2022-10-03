@@ -71,8 +71,8 @@
 #include <unistd.h>
 #include <ifaddrs.h>
 
-#define RTM_NEWFDB 0x13;
-#define RTM_DELFDB 0x14;
+#define RTM_NEWFDB 0x13
+#define RTM_DELFDB 0x14
 
 #endif
 
@@ -458,7 +458,7 @@ void build_freebsd_bridge_membership(void)
 		     (void **)NULL);
 }
 
-void ksocket_macfdb_read(struct zebra_ns *zns)
+int ksocket_macfdb_read(struct zebra_ns *zns)
 {
 	struct ifbaconf ifbac;
 	struct ifbareq *ifba;
@@ -523,11 +523,11 @@ void ksocket_macfdb_read(struct zebra_ns *zns)
 						member_ifp->name,
 						zif->brslave_info.bridge_ifindex);
 				continue;
-			if (IS_ZEBRA_IF_VXLAN(member_ifp->ifindex))
+			if (IS_ZEBRA_IF_VXLAN(member_ifp))
 				return zebra_vxlan_dp_network_mac_add(
-					memberif_idx, br_if, &mac, vid, 0, false, false);
+					member_ifp, br_if, &mac, vid, 0, false, false);
 
-			return zebra_vxlan_local_mac_add_update(memberif_idx, br_if, &mac, vid,
+			return zebra_vxlan_local_mac_add_update(member_ifp, br_if, &mac, vid,
 					false, false, false);
 		}
 		}
@@ -1723,12 +1723,12 @@ static int ksocket_macfdb_change(struct ifa_msghdr *ifm, int cmd)
 	 * so perform an implicit delete of any local entry (if it exists).
 	 */
 	if (cmd == RTM_NEWFDB) {
-		if (IS_ZEBRA_IF_VXLAN(memberif_idx))
+		if (IS_ZEBRA_IF_VXLAN(member_ifp))
 			return zebra_vxlan_dp_network_mac_add(
-				memberif_idx, br_if, &mac, vid, nhg_id, sticky,
+				member_ifp, br_if, &mac, vid, nhg_id, sticky,
 				dp_static);
 
-		return zebra_vxlan_local_mac_add_update(memberif_idx, br_if, &mac, vid,
+		return zebra_vxlan_local_mac_add_update(member_ifp, br_if, &mac, vid,
 				sticky, local_inactive, dp_static);
 	}
 
@@ -1744,10 +1744,10 @@ static int ksocket_macfdb_change(struct ifa_msghdr *ifm, int cmd)
 	 */
 	if (nhg_id)
 		return 0;
-	if (IS_ZEBRA_IF_VXLAN(ifp))
-		return zebra_vxlan_dp_network_mac_del(ifp, br_if, &mac, vid);
+	if (IS_ZEBRA_IF_VXLAN(member_ifp))
+		return zebra_vxlan_dp_network_mac_del(member_ifp, br_if, &mac, vid);
 
-	return zebra_vxlan_local_mac_del(ifp, br_if, &mac, vid);
+	return zebra_vxlan_local_mac_del(member_ifp, br_if, &mac, vid);
 }
 
 /* Kernel routing table and interface updates via routing socket. */

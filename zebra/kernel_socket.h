@@ -42,7 +42,7 @@ extern int rtm_write(int, union sockunion *, union sockunion *,
 		     enum blackhole_type, int);
 #ifdef __FreeBSD__
 extern void build_freebsd_bridge_membership(void);
-extern void ksocket_macfdb_read(struct zebra_ns *);
+extern int ksocket_macfdb_read(struct zebra_ns *);
 #endif
 extern const struct message rtm_type_str[];
 
