@@ -39,7 +39,6 @@
 #include "privs.h"
 #include "vrf.h"
 #include "lib_errors.h"
-#include "vxlan.h"
 
 #include "zebra/rt.h"
 #include "zebra/interface.h"
@@ -49,6 +48,7 @@
 #include "zebra/rib.h"
 #include "zebra/zebra_errors.h"
 #include "zebra/zebra_ptm.h"
+#include "zebra/zebra_vxlan.h"
 
 #ifdef __FreeBSD__
 
