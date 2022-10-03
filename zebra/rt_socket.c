@@ -487,9 +487,9 @@ enum zebra_dplane_result kernel_mac_update_ctx(struct zebra_dplane_ctx *ctx)
 		for (int i=0; i<6; i++){
 			cmd.vxlcmd_mac[i] = mac_addr[i];
 		}
-		if (IN_MULTICAST(ntohl(vtep_ip->ip._v4_addr.s_addr)))
+		if (IN_MULTICAST(ntohl(vtep_ip.ip._v4_addr.s_addr)))
 			return ZEBRA_DPLANE_REQUEST_SUCCESS;
-		sa.sin_addr = vtep_ip->ip._v4_addr;
+		sa.sin_addr = vtep_ip.ip._v4_addr;
 		sa.sin_family = AF_INET;
 		cmd.vxlcmd_sa.in4 = sa;
 		s = socket(AF_LOCAL, SOCK_DGRAM, 0);
