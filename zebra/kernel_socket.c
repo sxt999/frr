@@ -450,6 +450,7 @@ static int bridge_membership_create(struct ns *ns,
 		bridge_interfaces(s, ifp1, zns);
 	}
 	close(s);
+	return NS_WALK_CONTINUE;
 
 }
 
@@ -512,6 +513,8 @@ int ksocket_macfdb_read(struct zebra_ns *zns)
 			memcpy(&ea, ifba->ifba_dst, 6);
 			memcpy(&mac, ether_ntoa(&ea), 6);
 			memcpy(ifname, ifba->ifba_ifsname, sizeof(ifba->ifba_ifsname));
+			if (strcmp(&mac, all_zero_mac) == 0)
+				continue;
 			vid = ifba->ifba_vlan;
 			if (vid == 0)
 				continue;
@@ -539,6 +542,7 @@ int ksocket_macfdb_read(struct zebra_ns *zns)
 	}
 	close(s);
 	free(inbuf);
+	return 0;
 }
 
 #endif
@@ -1624,7 +1628,7 @@ static void rtmsg_debug(struct rt_msghdr *rtm)
 #endif /* RTA_NUMBITS */
 #endif /* RTAX_MAX */
 
-size_t rta_getsdlmac(caddr_t sap, void *destp, short *destlen, uint16_t *vid)
+static size_t rta_getsdlmac(caddr_t sap, void *destp, short *destlen, uint16_t *vid)
 {
 	struct sockaddr_dl *sdl = (struct sockaddr_dl *)sap;
 	uint8_t *dest = destp;
@@ -1649,7 +1653,7 @@ static int ksocket_macfdb_change(struct ifa_msghdr *ifm, int cmd)
 	struct zebra_if *zif;
 	struct interface *br_if;
 	vlanid_t vid = 0;
-	int vid_present = 0;
+	// int vid_present = 0;
 	char vid_buf[20];
 	bool sticky = false;
 	bool local_inactive = false;
@@ -1660,7 +1664,7 @@ static int ksocket_macfdb_change(struct ifa_msghdr *ifm, int cmd)
 	struct ethaddr mac;
 	uint8_t all_zero_mac[6] = {0};
 	short memberif_idx = 0;
-	short bridgeif_idx = 0;
+	// short bridgeif_idx = 0;
 
 	/* We only process macfdb notifications if EVPN is enabled */
 	if (!is_evpn_enabled())
@@ -1690,12 +1694,12 @@ static int ksocket_macfdb_change(struct ifa_msghdr *ifm, int cmd)
 			break;
 		}
 	}
-	if (strcmp(&mac, all_zero_mac) == 0)
+	if (strcmp(mac.octet, all_zero_mac) == 0)
 		return 0;
 	if (vid == 0)
 		return 0;
-	vid_present = 1;
-	bridgeif_idx = ifm->ifam_index;
+	// vid_present = 1;
+	// bridgeif_idx = ifm->ifam_index;
 	snprintf(vid_buf, sizeof(vid_buf), " VLAN %u", vid);
 	/* The interface should exist. */
 	member_ifp = if_lookup_by_index_per_ns(zebra_ns_lookup(NS_DEFAULT),
