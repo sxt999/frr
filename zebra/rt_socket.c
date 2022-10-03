@@ -467,6 +467,42 @@ extern int kernel_get_ipmr_sg_stats(struct zebra_vrf *zvrf, void *mroute)
  */
 enum zebra_dplane_result kernel_mac_update_ctx(struct zebra_dplane_ctx *ctx)
 {
+	if (dplane_ctx_get_op(ctx) != DPLANE_OP_MAC_INSTALL && dplane_ctx_get_op(ctx) != DPLANE_OP_MAC_DELETE)
+		return ZEBRA_DPLANE_REQUEST_SUCCESS;
+
+	struct ifvxlancmd cmd;
+	struct sockaddr_in sa;
+	struct sockaddr_in6 sa6;
+	int s;
+	uint32_t update_flags;
+	struct ipaddr vtep_ip;
+	uint8_t *mac_addr;
+
+	update_flags = dplane_ctx_mac_get_update_flags(ctx);
+	if (update_flags & DPLANE_MAC_REMOTE) {
+		bzero(&cmd, sizeof(cmd));
+		vtep_ip.ipaddr_v4 = *(dplane_ctx_mac_get_vtep_ip(ctx));
+		SET_IPADDR_V4(&vtep_ip);
+		mac_addr = dplane_ctx_mac_get_addr(ctx);
+		for (int i=0; i<6; i++){
+			cmd.vxlcmd_mac[i] = mac_addr[i];
+		}
+		if (IN_MULTICAST(ntohl(vtep_ip->ip._v4_addr.s_addr)))
+			return ZEBRA_DPLANE_REQUEST_SUCCESS;
+		sa.sin_addr = vtep_ip->ip._v4_addr;
+		sa.sin_family = AF_INET;
+		cmd.vxlcmd_sa.in4 = sa;
+		s = socket(AF_LOCAL, SOCK_DGRAM, 0);
+		if (dplane_ctx_get_op(ctx) == DPLANE_OP_MAC_INSTALL) {
+			do_cmd(s, VXLAN_CMD_FTABLE_ENTRY_ADD, &cmd, sizeof(cmd), 1, dplane_ctx_get_ifname(ctx));
+		}
+		if (dplane_ctx_get_op(ctx) == DPLANE_OP_MAC_DELETE) {
+			do_cmd(s, VXLAN_CMD_FTABLE_ENTRY_REM, &cmd, sizeof(cmd), 1, dplane_ctx_get_ifname(ctx));
+		}
+		close(s);
+		return ZEBRA_DPLANE_REQUEST_SUCCESS;
+	}
+	
 	return ZEBRA_DPLANE_REQUEST_SUCCESS;
 }
 

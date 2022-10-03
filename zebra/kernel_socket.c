@@ -71,6 +71,9 @@
 #include <unistd.h>
 #include <ifaddrs.h>
 
+#define RTM_NEWFDB 0x13;
+#define RTM_DELFDB 0x14;
+
 #endif
 
 extern struct zebra_privs_t zserv_privs;
@@ -453,6 +456,84 @@ void build_freebsd_bridge_membership(void)
 	ns_walk_func(bridge_membership_create,
 		     (void *)NULL,
 		     (void **)NULL);
+}
+
+void ksocket_macfdb_read(struct zebra_ns *zns)
+{
+	struct ifbaconf ifbac;
+	struct ifbareq *ifba;
+	char *inbuf = NULL, *ninbuf;
+	int i, len = 8192;
+	uint8_t ea[6] = {0};
+	uint8_t mac[6] = {0};
+	uint8_t all_zero_mac[6] = {0};
+	struct interface *member_ifp;
+	struct interface *ifp1;
+	struct interface *br_if;
+	struct zebra_if *zif;
+	struct zebra_if *zif1;
+	char ifname[20] = {0};
+	vlanid_t vid = 0;
+	int s;
+	struct route_node *rn1;
+
+	s = socket(AF_LOCAL, SOCK_DGRAM, 0);
+
+	for (rn1 = route_top(zns->if_table); rn1; rn1 = route_next(rn1)) {
+		ifp1 = (struct interface *)rn1->info;
+
+		if (!ifp1)
+			continue;
+		zif1 = ifp1->info;
+		if (!zif1 || zif1->zif_type != ZEBRA_IF_BRIDGE)
+			continue;
+		for (;;) {
+			ninbuf = realloc(inbuf, len);
+			if (ninbuf == NULL)
+				printf("unable to allocate address buffer\n");
+				return 0;
+			ifbac.ifbac_len = len;
+			ifbac.ifbac_buf = inbuf = ninbuf;
+			if (do_cmd(s, BRDGRTS, &ifbac, sizeof(ifbac), 0, ifp1->name) < 0)
+				printf("unable to get address cache\n");
+				return 0;
+			if ((ifbac.ifbac_len + sizeof(*ifba)) < len)
+				break;
+			len *= 2;
+		}
+
+		for (i = 0; i < ifbac.ifbac_len / sizeof(*ifba); i++) {
+			ifba = ifbac.ifbac_req + i;
+			memcpy(ea, ifba->ifba_dst, sizeof(ea));
+			snprintf(mac, sizeof(mac), "%s", ether_ntoa(&ea));
+			vid = ifba->ifba_vlan;
+			snprintf(ifname, sizeof(ifname), "%s", ifba->ifba_ifsname);
+			if (vid == 0)
+				continue;
+			member_ifp = if_lookup_by_name_per_ns(zns, ifname);
+			if (!member_ifp || !member_ifp->info)
+				continue;
+			if (!IS_ZEBRA_IF_BRIDGE_SLAVE(member_ifp))
+				continue;
+			zif = (struct zebra_if *)member_ifp->info;
+			if ((br_if = zif->brslave_info.br_if) == NULL) {
+				if (IS_ZEBRA_DEBUG_KERNEL)
+					zlog_debug(
+						"AF_BRIDGE IF %s brIF %u - no bridge master",
+						member_ifp->name,
+						zif->brslave_info.bridge_ifindex);
+				continue;
+			if (IS_ZEBRA_IF_VXLAN(member_ifp->ifindex))
+				return zebra_vxlan_dp_network_mac_add(
+					memberif_idx, br_if, &mac, vid, 0, false, false);
+
+			return zebra_vxlan_local_mac_add_update(memberif_idx, br_if, &mac, vid,
+					false, false, false);
+		}
+		}
+	}
+	close(s);
+	free(inbuf);
 }
 
 #endif
@@ -1538,6 +1619,137 @@ static void rtmsg_debug(struct rt_msghdr *rtm)
 #endif /* RTA_NUMBITS */
 #endif /* RTAX_MAX */
 
+size_t rta_getsdlmac(caddr_t sap, void *destp, short *destlen, uint16_t *vid)
+{
+	struct sockaddr_dl *sdl = (struct sockaddr_dl *)sap;
+	uint8_t *dest = destp;
+	size_t tlen, copylen;
+
+	copylen = sdl->sdl_alen;
+	struct sockaddr *sa = (struct sockaddr *)sap;
+
+	tlen = (sa->sa_len == 0) ? sizeof(ROUNDUP_TYPE) : ROUNDUP(sa->sa_len);
+	if (copylen > 0 && dest != NULL && sdl->sdl_family == AF_LINK) {
+		memcpy(dest, LLADDR(sdl), copylen);
+		memcpy(vid, sdl->sdl_data, sdl->sdl_nlen);
+		dest[copylen] = 0;
+		*destlen = sdl->sdl_index;
+	}
+	return tlen;
+}
+
+static int ksocket_macfdb_change(struct ifa_msghdr *ifm, int cmd)
+{
+	struct interface *member_ifp;
+	struct zebra_if *zif;
+	struct interface *br_if;
+	vlanid_t vid = 0;
+	int vid_present = 0;
+	char vid_buf[20];
+	bool sticky = false;
+	bool local_inactive = false;
+	bool dp_static = false;
+	uint32_t nhg_id = 0;
+	caddr_t pnt, end;
+	int maskbit;
+	uint8_t mac[6] = {0};
+	uint8_t all_zero_mac[6] = {0};
+	short memberif_idx = 0;
+	short bridgeif_idx = 0;
+
+	/* We only process macfdb notifications if EVPN is enabled */
+	if (!is_evpn_enabled())
+		return 0;
+
+	/* Parse attributes and extract fields of interest. Do basic
+	 * validation of the fields.
+	 */
+	pnt = (caddr_t)(ifm + 1);
+	end = ((caddr_t)ifm) + ifm->ifam_msglen;
+	if (!pnt)
+		return 0;
+	if (!end)
+		return 0;
+
+	for (maskbit = 1; maskbit; maskbit <<= 1) {
+		if ((maskbit & ifm->ifam_addrs) == 0)
+			continue;
+
+		switch (maskbit) {
+		case RTA_IFP:
+			pnt += rta_getsdlmac(pnt, mac, &memberif_idx, &vid);
+			break;
+		
+		default:
+			printf("not supported mask: %d\n", maskbit);
+			break;
+		}
+	}
+	if (strcmp(mac, all_zero_mac) == 0)
+		return 0;
+	if (vid == 0)
+		return 0;
+	vid_present = 1;
+	bridgeif_idx = ifm->ifam_index;
+	snprintf(vid_buf, sizeof(vid_buf), " VLAN %u", vid);
+	/* The interface should exist. */
+	member_ifp = if_lookup_by_index_per_ns(zebra_ns_lookup(NS_DEFAULT),
+					memberif_idx);
+	if (!member_ifp || !member_ifp->info)
+		return 0;
+	// bridge_ifp = if_lookup_by_index_per_ns(zebra_ns_lookup(NS_DEFAULT),
+	// 				bridgeif_idx);
+	// if (!bridge_ifp || !bridge_ifp->info)
+	// 	return 0;
+
+	/* The interface should be something we're interested in. */
+	if (!IS_ZEBRA_IF_BRIDGE_SLAVE(member_ifp))
+		return 0;
+
+	zif = (struct zebra_if *)member_ifp->info;
+	if ((br_if = zif->brslave_info.br_if) == NULL) {
+		if (IS_ZEBRA_DEBUG_KERNEL)
+			zlog_debug(
+				"AF_BRIDGE IF %s(%u) brIF %u - no bridge master",
+				member_ifp->name,
+				memberif_idx,
+				zif->brslave_info.bridge_ifindex);
+		return 0;
+	}
+
+	/* If add or update, do accordingly if learnt on a "local" interface; if
+	 * the notification is over VxLAN, this has to be related to
+	 * multi-homing,
+	 * so perform an implicit delete of any local entry (if it exists).
+	 */
+	if (cmd == RTM_NEWFDB) {
+		if (IS_ZEBRA_IF_VXLAN(memberif_idx))
+			return zebra_vxlan_dp_network_mac_add(
+				memberif_idx, br_if, &mac, vid, nhg_id, sticky,
+				dp_static);
+
+		return zebra_vxlan_local_mac_add_update(memberif_idx, br_if, &mac, vid,
+				sticky, local_inactive, dp_static);
+	}
+
+	/* This is a delete notification.
+	 * Ignore the notification with IP dest as it may just signify that the
+	 * MAC has moved from remote to local. The exception is the special
+	 * all-zeros MAC that represents the BUM flooding entry; we may have
+	 * to readd it. Otherwise,
+	 *  1. For a MAC over VxLan, check if it needs to be refreshed(readded)
+	 *  2. For a MAC over "local" interface, delete the mac
+	 * Note: We will get notifications from both bridge driver and VxLAN
+	 * driver.
+	 */
+	if (nhg_id)
+		return 0;
+	if (IS_ZEBRA_IF_VXLAN(ifp))
+		return zebra_vxlan_dp_network_mac_del(ifp, br_if, &mac, vid);
+
+	return zebra_vxlan_local_mac_del(ifp, br_if, &mac, vid);
+}
+
 /* Kernel routing table and interface updates via routing socket. */
 static int kernel_read(struct thread *thread)
 {
@@ -1648,6 +1860,14 @@ static int kernel_read(struct thread *thread)
 		ifan_read(&buf.ian.ifan);
 		break;
 #endif /* RTM_IFANNOUNCE */
+#ifdef __FreeBSD__
+	case RTM_NEWFDB:
+		ksocket_macfdb_change(&buf.ia.ifa, RTM_NEWFDB);
+		break;
+	case RTM_DELFDB:
+		ksocket_macfdb_change(&buf.ia.ifa, RTM_DELFDB);
+		break;
+#endif
 	default:
 		if (IS_ZEBRA_DEBUG_KERNEL)
 			zlog_debug("Unprocessed RTM_type: %d", rtm->rtm_type);

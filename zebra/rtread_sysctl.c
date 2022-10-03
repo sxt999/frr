@@ -80,6 +80,9 @@ void route_read(struct zebra_ns *zns)
 /* Only implemented for the netlink method. */
 void macfdb_read(struct zebra_ns *zns)
 {
+#ifdef __FreeBSD__
+	ksocket_macfdb_read(zns);
+#endif
 }
 
 void macfdb_read_for_bridge(struct zebra_ns *zns, struct interface *ifp,
