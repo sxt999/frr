@@ -510,8 +510,8 @@ int ksocket_macfdb_read(struct zebra_ns *zns)
 		for (i = 0; i < ifbac.ifbac_len / sizeof(*ifba); i++) {
 			ifba = ifbac.ifbac_req + i;
 			memcpy(ea, ifba->ifba_dst, sizeof(ea));
-			memcpy(mac, ether_ntoa(&ea), sizeof(mac))
-			memcpy(ifname, ifba->ifba_ifsname, sizeof(ifba->ifba_ifsname))
+			memcpy(mac, ether_ntoa(ea), sizeof(mac));
+			memcpy(ifname, ifba->ifba_ifsname, sizeof(ifba->ifba_ifsname));
 			vid = ifba->ifba_vlan;
 			if (vid == 0)
 				continue;
