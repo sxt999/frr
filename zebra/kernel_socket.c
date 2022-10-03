@@ -39,6 +39,7 @@
 #include "privs.h"
 #include "vrf.h"
 #include "lib_errors.h"
+#include "vxlan.h"
 
 #include "zebra/rt.h"
 #include "zebra/interface.h"

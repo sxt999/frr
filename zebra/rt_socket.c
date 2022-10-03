@@ -472,7 +472,6 @@ enum zebra_dplane_result kernel_mac_update_ctx(struct zebra_dplane_ctx *ctx)
 
 	struct ifvxlancmd cmd;
 	struct sockaddr_in sa;
-	struct sockaddr_in6 sa6;
 	int s;
 	uint32_t update_flags;
 	struct ipaddr vtep_ip;
