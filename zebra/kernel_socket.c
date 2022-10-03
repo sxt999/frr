@@ -467,7 +467,7 @@ int ksocket_macfdb_read(struct zebra_ns *zns)
 	char *inbuf = NULL, *ninbuf;
 	int len = 8192;
 	unsigned int i;
-	uint8_t ea[6] = {0};
+	struct ether_addr ea;
 	uint8_t mac[6] = {0};
 	uint8_t all_zero_mac[6] = {0};
 	struct interface *member_ifp;
@@ -509,8 +509,8 @@ int ksocket_macfdb_read(struct zebra_ns *zns)
 
 		for (i = 0; i < ifbac.ifbac_len / sizeof(*ifba); i++) {
 			ifba = ifbac.ifbac_req + i;
-			memcpy(ea, ifba->ifba_dst, sizeof(ea));
-			memcpy(mac, ether_ntoa(ea), sizeof(mac));
+			memcpy(&ea, ifba->ifba_dst, sizeof(ea));
+			memcpy(mac, ether_ntoa(&ea), sizeof(mac));
 			memcpy(ifname, ifba->ifba_ifsname, sizeof(ifba->ifba_ifsname));
 			vid = ifba->ifba_vlan;
 			if (vid == 0)
