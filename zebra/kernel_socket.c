@@ -346,7 +346,8 @@ bridge_interfaces(int s, struct interface *ifp, struct zebra_ns *zns)
 	struct ifbifconf bifc;
 	struct ifbreq *req;
 	char *inbuf = NULL, *ninbuf;
-	int i, len = 8192;
+	int len = 8192;
+	unsigned int i;
 	struct route_node *rn1;
 	struct interface *ifp1;
 	struct zebra_if *zif;
@@ -359,7 +360,7 @@ bridge_interfaces(int s, struct interface *ifp, struct zebra_ns *zns)
 		bifc.ifbic_buf = inbuf = ninbuf;
 		if (do_cmd(s, BRDGGIFS, &bifc, sizeof(bifc), 0, ifp->name) < 0)
 			return;
-		if ((bifc.ifbic_len + sizeof(*req)) < len)
+		if ((bifc.ifbic_len + sizeof(*req)) < (unsigned int)len)
 			break;
 		len *= 2;
 	}
@@ -464,7 +465,8 @@ int ksocket_macfdb_read(struct zebra_ns *zns)
 	struct ifbaconf ifbac;
 	struct ifbareq *ifba;
 	char *inbuf = NULL, *ninbuf;
-	int i, len = 8192;
+	int len = 8192;
+	unsigned int i;
 	uint8_t ea[6] = {0};
 	uint8_t mac[6] = {0};
 	uint8_t all_zero_mac[6] = {0};
@@ -490,15 +492,17 @@ int ksocket_macfdb_read(struct zebra_ns *zns)
 			continue;
 		for (;;) {
 			ninbuf = realloc(inbuf, len);
-			if (ninbuf == NULL)
+			if (ninbuf == NULL) {
 				printf("unable to allocate address buffer\n");
 				return 0;
+			}
 			ifbac.ifbac_len = len;
 			ifbac.ifbac_buf = inbuf = ninbuf;
-			if (do_cmd(s, BRDGRTS, &ifbac, sizeof(ifbac), 0, ifp1->name) < 0)
+			if (do_cmd(s, BRDGRTS, &ifbac, sizeof(ifbac), 0, ifp1->name) < 0) {
 				printf("unable to get address cache\n");
 				return 0;
-			if ((ifbac.ifbac_len + sizeof(*ifba)) < len)
+			}
+			if ((ifbac.ifbac_len + sizeof(*ifba)) < (unsigned int)len)
 				break;
 			len *= 2;
 		}
@@ -506,9 +510,9 @@ int ksocket_macfdb_read(struct zebra_ns *zns)
 		for (i = 0; i < ifbac.ifbac_len / sizeof(*ifba); i++) {
 			ifba = ifbac.ifbac_req + i;
 			memcpy(ea, ifba->ifba_dst, sizeof(ea));
-			snprintf(mac, sizeof(mac), "%s", ether_ntoa(&ea));
+			memcpy(mac, ether_ntoa(&ea), sizeof(mac))
+			memcpy(ifname, ifba->ifba_ifsname, sizeof(ifba->ifba_ifsname))
 			vid = ifba->ifba_vlan;
-			snprintf(ifname, sizeof(ifname), "%s", ifba->ifba_ifsname);
 			if (vid == 0)
 				continue;
 			member_ifp = if_lookup_by_name_per_ns(zns, ifname);
@@ -526,9 +530,9 @@ int ksocket_macfdb_read(struct zebra_ns *zns)
 				continue;
 			if (IS_ZEBRA_IF_VXLAN(member_ifp))
 				return zebra_vxlan_dp_network_mac_add(
-					member_ifp, br_if, &mac, vid, 0, false, false);
+					member_ifp, br_if, mac, vid, 0, false, false);
 
-			return zebra_vxlan_local_mac_add_update(member_ifp, br_if, &mac, vid,
+			return zebra_vxlan_local_mac_add_update(member_ifp, br_if, mac, vid,
 					false, false, false);
 		}
 		}
@@ -1729,7 +1733,7 @@ static int ksocket_macfdb_change(struct ifa_msghdr *ifm, int cmd)
 				member_ifp, br_if, &mac, vid, nhg_id, sticky,
 				dp_static);
 
-		return zebra_vxlan_local_mac_add_update(member_ifp, br_if, &mac, vid,
+		return zebra_vxlan_local_mac_add_update(member_ifp, br_if, mac, vid,
 				sticky, local_inactive, dp_static);
 	}
 
@@ -1746,7 +1750,7 @@ static int ksocket_macfdb_change(struct ifa_msghdr *ifm, int cmd)
 	if (nhg_id)
 		return 0;
 	if (IS_ZEBRA_IF_VXLAN(member_ifp))
-		return zebra_vxlan_dp_network_mac_del(member_ifp, br_if, &mac, vid);
+		return zebra_vxlan_dp_network_mac_del(member_ifp, br_if, mac, vid);
 
 	return zebra_vxlan_local_mac_del(member_ifp, br_if, &mac, vid);
 }
