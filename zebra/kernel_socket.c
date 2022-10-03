@@ -468,7 +468,7 @@ int ksocket_macfdb_read(struct zebra_ns *zns)
 	int len = 8192;
 	unsigned int i;
 	struct ether_addr ea;
-	uint8_t mac[6] = {0};
+	struct ethaddr mac;
 	uint8_t all_zero_mac[6] = {0};
 	struct interface *member_ifp;
 	struct interface *ifp1;
@@ -509,8 +509,8 @@ int ksocket_macfdb_read(struct zebra_ns *zns)
 
 		for (i = 0; i < ifbac.ifbac_len / sizeof(*ifba); i++) {
 			ifba = ifbac.ifbac_req + i;
-			memcpy(&ea, ifba->ifba_dst, sizeof(ea));
-			memcpy(mac, ether_ntoa(&ea), sizeof(mac));
+			memcpy(&ea, ifba->ifba_dst, 6);
+			memcpy(&mac, ether_ntoa(&ea), 6);
 			memcpy(ifname, ifba->ifba_ifsname, sizeof(ifba->ifba_ifsname));
 			vid = ifba->ifba_vlan;
 			if (vid == 0)
@@ -530,9 +530,9 @@ int ksocket_macfdb_read(struct zebra_ns *zns)
 				continue;
 			if (IS_ZEBRA_IF_VXLAN(member_ifp))
 				return zebra_vxlan_dp_network_mac_add(
-					member_ifp, br_if, mac, vid, 0, false, false);
+					member_ifp, br_if, &mac, vid, 0, false, false);
 
-			return zebra_vxlan_local_mac_add_update(member_ifp, br_if, mac, vid,
+			return zebra_vxlan_local_mac_add_update(member_ifp, br_if, &mac, vid,
 					false, false, false);
 		}
 		}
@@ -1657,7 +1657,7 @@ static int ksocket_macfdb_change(struct ifa_msghdr *ifm, int cmd)
 	uint32_t nhg_id = 0;
 	caddr_t pnt, end;
 	int maskbit;
-	uint8_t mac[6] = {0};
+	struct ethaddr mac;
 	uint8_t all_zero_mac[6] = {0};
 	short memberif_idx = 0;
 	short bridgeif_idx = 0;
@@ -1682,7 +1682,7 @@ static int ksocket_macfdb_change(struct ifa_msghdr *ifm, int cmd)
 
 		switch (maskbit) {
 		case RTA_IFP:
-			pnt += rta_getsdlmac(pnt, mac, &memberif_idx, &vid);
+			pnt += rta_getsdlmac(pnt, &mac, &memberif_idx, &vid);
 			break;
 		
 		default:
@@ -1690,7 +1690,7 @@ static int ksocket_macfdb_change(struct ifa_msghdr *ifm, int cmd)
 			break;
 		}
 	}
-	if (strcmp(mac, all_zero_mac) == 0)
+	if (strcmp(&mac, all_zero_mac) == 0)
 		return 0;
 	if (vid == 0)
 		return 0;
@@ -1733,7 +1733,7 @@ static int ksocket_macfdb_change(struct ifa_msghdr *ifm, int cmd)
 				member_ifp, br_if, &mac, vid, nhg_id, sticky,
 				dp_static);
 
-		return zebra_vxlan_local_mac_add_update(member_ifp, br_if, mac, vid,
+		return zebra_vxlan_local_mac_add_update(member_ifp, br_if, &mac, vid,
 				sticky, local_inactive, dp_static);
 	}
 
@@ -1750,7 +1750,7 @@ static int ksocket_macfdb_change(struct ifa_msghdr *ifm, int cmd)
 	if (nhg_id)
 		return 0;
 	if (IS_ZEBRA_IF_VXLAN(member_ifp))
-		return zebra_vxlan_dp_network_mac_del(member_ifp, br_if, mac, vid);
+		return zebra_vxlan_dp_network_mac_del(member_ifp, br_if, &mac, vid);
 
 	return zebra_vxlan_local_mac_del(member_ifp, br_if, &mac, vid);
 }
