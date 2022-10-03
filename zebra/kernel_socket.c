@@ -513,7 +513,7 @@ int ksocket_macfdb_read(struct zebra_ns *zns)
 			memcpy(&ea, ifba->ifba_dst, 6);
 			memcpy(&mac, ether_ntoa(&ea), 6);
 			memcpy(ifname, ifba->ifba_ifsname, sizeof(ifba->ifba_ifsname));
-			if (strcmp(&mac, all_zero_mac) == 0)
+			if (memcmp(mac.octet, all_zero_mac, 6) == 0)
 				continue;
 			vid = ifba->ifba_vlan;
 			if (vid == 0)
@@ -1694,7 +1694,7 @@ static int ksocket_macfdb_change(struct ifa_msghdr *ifm, int cmd)
 			break;
 		}
 	}
-	if (strcmp(mac.octet, all_zero_mac) == 0)
+	if (memcmp(mac.octet, all_zero_mac, 6) == 0)
 		return 0;
 	if (vid == 0)
 		return 0;
