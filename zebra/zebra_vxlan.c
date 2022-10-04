@@ -4849,10 +4849,13 @@ int zebra_vxlan_if_up(struct interface *ifp)
 		}
 
 		assert(zevpn->vxlan_if == ifp);
-#ifdef __FreeBSD__
-		zevpn->local_vtep_ip = vxl->vtep_ip;
-		zevpn->mcast_grp = vxl->mcast_grp;
-#endif
+		if (zevpn->local_vtep_ip.s_addr !=
+			vxl->vtep_ip.s_addr ||
+			zevpn->mcast_grp.s_addr !=
+			vxl->mcast_grp.s_addr) {
+			return zebra_vxlan_if_update(ifp, ZEBRA_VXLIF_LOCAL_IP_CHANGE);
+		}
+
 		vlan_if = zvni_map_to_svi(vxl->access_vlan,
 					  zif->brslave_info.br_if);
 		if (vlan_if) {

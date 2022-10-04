@@ -1821,7 +1821,7 @@ static int ksocket_macfdb_change(struct ifa_msghdr *ifm, int cmd)
 	struct interface *br_if;
 	vlanid_t vid = 0;
 	// int vid_present = 0;
-	char vid_buf[20];
+	// char vid_buf[20];
 	bool sticky = false;
 	bool local_inactive = false;
 	bool dp_static = false;
@@ -1850,16 +1850,20 @@ static int ksocket_macfdb_change(struct ifa_msghdr *ifm, int cmd)
 	for (maskbit = 1; maskbit; maskbit <<= 1) {
 		if ((maskbit & ifm->ifam_addrs) == 0)
 			continue;
-
-		switch (maskbit) {
-		case RTA_IFP:
+		if (maskbit == RTA_IFP) {
 			pnt += rta_getsdlmac(pnt, &mac, &memberif_idx, &vid);
-			break;
-		
-		default:
-			printf("not supported mask: %d\n", maskbit);
-			break;
+			break;	
 		}
+
+		// switch (maskbit) {
+		// case RTA_IFP:
+		// 	pnt += rta_getsdlmac(pnt, &mac, &memberif_idx, &vid);
+		// 	break;
+		
+		// default:
+		// 	printf("not supported mask: %d\n", maskbit);
+		// 	break;
+		// }
 	}
 	if (memcmp(mac.octet, all_zero_mac, 6) == 0)
 		return 0;
@@ -1867,7 +1871,7 @@ static int ksocket_macfdb_change(struct ifa_msghdr *ifm, int cmd)
 		return 0;
 	// vid_present = 1;
 	// bridgeif_idx = ifm->ifam_index;
-	snprintf(vid_buf, sizeof(vid_buf), " VLAN %u", vid);
+	// snprintf(vid_buf, sizeof(vid_buf), " VLAN %u", vid);
 	/* The interface should exist. */
 	member_ifp = if_lookup_by_index_per_ns(zebra_ns_lookup(NS_DEFAULT),
 					memberif_idx);
