@@ -4275,7 +4275,11 @@ void zebra_vxlan_remote_vtep_del(vrf_id_t vrf_id, vni_t vni,
 	zif = ifp->info;
 
 	/* If down or not mapped to a bridge, we're done. */
-	if (!if_is_operative(ifp) || !zif->brslave_info.br_if)
+	if (!if_is_operative(ifp)
+#ifndef __FreeBSD__
+	|| !zif->brslave_info.br_if
+#endif
+	)
 		return;
 
 	/* If the remote VTEP does not exist, there's nothing more to
