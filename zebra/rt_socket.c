@@ -475,7 +475,7 @@ enum zebra_dplane_result kernel_mac_update_ctx(struct zebra_dplane_ctx *ctx)
 	int s;
 	uint32_t update_flags;
 	struct ipaddr vtep_ip;
-	uint8_t *mac_addr;
+	const struct ethaddr *mac_addr;
 
 	update_flags = dplane_ctx_mac_get_update_flags(ctx);
 	if (update_flags & DPLANE_MAC_REMOTE) {
@@ -484,7 +484,7 @@ enum zebra_dplane_result kernel_mac_update_ctx(struct zebra_dplane_ctx *ctx)
 		SET_IPADDR_V4(&vtep_ip);
 		mac_addr = dplane_ctx_mac_get_addr(ctx);
 		for (int i=0; i<6; i++){
-			cmd.vxlcmd_mac[i] = mac_addr[i];
+			cmd.vxlcmd_mac[i] = mac_addr->octet[i];
 		}
 		if (IN_MULTICAST(ntohl(vtep_ip.ip._v4_addr.s_addr)))
 			return ZEBRA_DPLANE_REQUEST_SUCCESS;
