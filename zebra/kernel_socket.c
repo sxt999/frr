@@ -575,7 +575,7 @@ int ksocket_macfdb_read_for_bridge(struct zebra_ns *zns, struct interface *ifp,
 
 	zif1 = br_if->info;
 	if (!zif1 || zif1->zif_type != ZEBRA_IF_BRIDGE)
-		continue;
+		return 0;
 	for (;;) {
 		ninbuf = realloc(inbuf, len);
 		if (ninbuf == NULL) {
@@ -658,7 +658,7 @@ int ksocket_macfdb_read_specific_mac(struct zebra_ns *zns, struct interface *br_
 
 	zif1 = br_if->info;
 	if (!zif1 || zif1->zif_type != ZEBRA_IF_BRIDGE)
-		continue;
+		return 0;
 	for (;;) {
 		ninbuf = realloc(inbuf, len);
 		if (ninbuf == NULL) {
