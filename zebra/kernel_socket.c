@@ -532,9 +532,11 @@ int ksocket_macfdb_read(struct zebra_ns *zns)
 						zif->brslave_info.bridge_ifindex);
 				continue;
 			}
-			if (IS_ZEBRA_IF_VXLAN(member_ifp))
+			if (IS_ZEBRA_IF_VXLAN(member_ifp)) {
 				zebra_vxlan_dp_network_mac_add(
 					member_ifp, br_if, &mac, vid, 0, false, false);
+				continue;
+			}
 
 			zebra_vxlan_local_mac_add_update(member_ifp, br_if, &mac, vid,
 					false, false, false);
