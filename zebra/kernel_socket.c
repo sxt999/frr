@@ -641,7 +641,6 @@ int ksocket_macfdb_read_specific_mac(struct zebra_ns *zns, struct interface *br_
 	unsigned int i;
 	struct ether_addr ea;
 	struct ethaddr mac1;
-	uint8_t all_zero_mac[6] = {0};
 	struct interface *member_ifp;
 	struct interface *ifp1;
 	struct zebra_if *zif;
