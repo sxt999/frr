@@ -469,7 +469,7 @@ int ksocket_macfdb_read(struct zebra_ns *zns)
 	int len = 8192;
 	unsigned int i;
 	struct ether_addr ea;
-	struct ethaddr mac;
+	// struct ethaddr mac;
 	uint8_t all_zero_mac[6] = {0};
 	struct interface *member_ifp;
 	struct interface *ifp1;
@@ -511,9 +511,9 @@ int ksocket_macfdb_read(struct zebra_ns *zns)
 		for (i = 0; i < ifbac.ifbac_len / sizeof(*ifba); i++) {
 			ifba = ifbac.ifbac_req + i;
 			memcpy(&ea, ifba->ifba_dst, 6);
-			memcpy(&mac, ether_ntoa(&ea), 6);
+			// memcpy(&mac, ether_ntoa(&ea), 6);
 			memcpy(ifname, ifba->ifba_ifsname, sizeof(ifba->ifba_ifsname));
-			if (memcmp(mac.octet, all_zero_mac, 6) == 0)
+			if (memcmp(ea.octet, all_zero_mac, 6) == 0)
 				continue;
 			vid = ifba->ifba_vlan;
 			if (vid == 0)
@@ -533,9 +533,9 @@ int ksocket_macfdb_read(struct zebra_ns *zns)
 				continue;
 			if (IS_ZEBRA_IF_VXLAN(member_ifp))
 				return zebra_vxlan_dp_network_mac_add(
-					member_ifp, br_if, &mac, vid, 0, false, false);
+					member_ifp, br_if, &ea, vid, 0, false, false);
 
-			return zebra_vxlan_local_mac_add_update(member_ifp, br_if, &mac, vid,
+			return zebra_vxlan_local_mac_add_update(member_ifp, br_if, &ea, vid,
 					false, false, false);
 		}
 		}
