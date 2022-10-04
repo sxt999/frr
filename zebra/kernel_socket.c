@@ -1218,7 +1218,13 @@ int ifm_read(struct if_msghdr *ifm)
 			 * will still behave correctly if run on a platform
 			 * without
 			 */
+			if (IS_ZEBRA_IF_VXLAN(ifp))
+				zebra_vxlan_if_del(ifp);
 			if_delete_update(&ifp);
+		}
+		else {
+			if (IS_ZEBRA_IF_VXLAN(ifp))
+				zebra_vxlan_if_add(ifp);
 		}
 #endif /* RTM_IFANNOUNCE */
 		if (ifp && if_is_up(ifp)) {
