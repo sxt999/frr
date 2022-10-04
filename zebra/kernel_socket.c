@@ -680,7 +680,7 @@ int ksocket_macfdb_read_specific_mac(struct zebra_ns *zns, struct interface *br_
 		memcpy(&ea, ifba->ifba_dst, 6);
 		memcpy(&mac1, &ea, 6);
 		memcpy(ifname, ifba->ifba_ifsname, sizeof(ifba->ifba_ifsname));
-		if (memcmp(mac1.octet, mac.octet, 6) != 0)
+		if (memcmp(mac1.octet, mac->octet, 6) != 0)
 			continue;
 		vid = ifba->ifba_vlan;
 		if (vid == 0)
@@ -701,11 +701,11 @@ int ksocket_macfdb_read_specific_mac(struct zebra_ns *zns, struct interface *br_
 		}
 		if (IS_ZEBRA_IF_VXLAN(member_ifp)) {
 			zebra_vxlan_dp_network_mac_add(
-				member_ifp, br_if, &mac, vid, 0, false, false);
+				member_ifp, br_if, &mac1, vid, 0, false, false);
 			continue;
 		}
 
-		zebra_vxlan_local_mac_add_update(member_ifp, br_if, &mac, vid,
+		zebra_vxlan_local_mac_add_update(member_ifp, br_if, &mac1, vid,
 				false, false, false);
 	}
 	close(s);
