@@ -548,6 +548,172 @@ int ksocket_macfdb_read(struct zebra_ns *zns)
 	return 0;
 }
 
+int ksocket_macfdb_read_for_bridge(struct zebra_ns *zns, struct interface *ifp,
+			    struct interface *br_if)
+{
+	struct ifbaconf ifbac;
+	struct ifbareq *ifba;
+	char *inbuf = NULL, *ninbuf;
+	int len = 8192;
+	unsigned int i;
+	struct ether_addr ea;
+	struct ethaddr mac;
+	uint8_t all_zero_mac[6] = {0};
+	struct interface *member_ifp;
+	struct interface *ifp1;
+	struct zebra_if *zif;
+	struct zebra_if *zif1;
+	char ifname[20] = {0};
+	vlanid_t vid = 0;
+	int s;
+	if (!ifp)
+		return 0;
+	if (!br_if)
+		return 0;
+
+	s = socket(AF_LOCAL, SOCK_DGRAM, 0);
+
+	zif1 = br_if->info;
+	if (!zif1 || zif1->zif_type != ZEBRA_IF_BRIDGE)
+		continue;
+	for (;;) {
+		ninbuf = realloc(inbuf, len);
+		if (ninbuf == NULL) {
+			printf("unable to allocate address buffer\n");
+			return 0;
+		}
+		ifbac.ifbac_len = len;
+		ifbac.ifbac_buf = inbuf = ninbuf;
+		if (do_cmd(s, BRDGRTS, &ifbac, sizeof(ifbac), 0, br_if->name) < 0) {
+			printf("unable to get address cache\n");
+			return 0;
+		}
+		if ((ifbac.ifbac_len + sizeof(*ifba)) < (unsigned int)len)
+			break;
+		len *= 2;
+	}
+
+	for (i = 0; i < ifbac.ifbac_len / sizeof(*ifba); i++) {
+		ifba = ifbac.ifbac_req + i;
+		memcpy(&ea, ifba->ifba_dst, 6);
+		memcpy(&mac, &ea, 6);
+		memcpy(ifname, ifba->ifba_ifsname, sizeof(ifba->ifba_ifsname));
+		if (memcmp(mac.octet, all_zero_mac, 6) == 0)
+			continue;
+		vid = ifba->ifba_vlan;
+		if (vid == 0)
+			continue;
+		member_ifp = if_lookup_by_name_per_ns(zns, ifname);
+		if (!member_ifp || !member_ifp->info)
+			continue;
+		if (!IS_ZEBRA_IF_BRIDGE_SLAVE(member_ifp))
+			continue;
+		zif = (struct zebra_if *)member_ifp->info;
+		if ((ifp1 = zif->brslave_info.br_if) == NULL) {
+			if (IS_ZEBRA_DEBUG_KERNEL)
+				zlog_debug(
+					"AF_BRIDGE IF %s brIF %u - no bridge master",
+					member_ifp->name,
+					zif->brslave_info.bridge_ifindex);
+			continue;
+		}
+		if (IS_ZEBRA_IF_VXLAN(member_ifp)) {
+			zebra_vxlan_dp_network_mac_add(
+				member_ifp, br_if, &mac, vid, 0, false, false);
+			continue;
+		}
+
+		zebra_vxlan_local_mac_add_update(member_ifp, br_if, &mac, vid,
+				false, false, false);
+	}
+	close(s);
+	free(inbuf);
+	return 0;
+}
+
+int ksocket_macfdb_read_specific_mac(struct zebra_ns *zns, struct interface *br_if,
+			      const struct ethaddr *mac, vlanid_t vid)
+{
+	struct ifbaconf ifbac;
+	struct ifbareq *ifba;
+	char *inbuf = NULL, *ninbuf;
+	int len = 8192;
+	unsigned int i;
+	struct ether_addr ea;
+	struct ethaddr mac1;
+	uint8_t all_zero_mac[6] = {0};
+	struct interface *member_ifp;
+	struct interface *ifp1;
+	struct zebra_if *zif;
+	struct zebra_if *zif1;
+	char ifname[20] = {0};
+	vlanid_t vid = 0;
+	int s;
+	if (!mac)
+		return 0;
+	if (!br_if)
+		return 0;
+
+	s = socket(AF_LOCAL, SOCK_DGRAM, 0);
+
+	zif1 = br_if->info;
+	if (!zif1 || zif1->zif_type != ZEBRA_IF_BRIDGE)
+		continue;
+	for (;;) {
+		ninbuf = realloc(inbuf, len);
+		if (ninbuf == NULL) {
+			printf("unable to allocate address buffer\n");
+			return 0;
+		}
+		ifbac.ifbac_len = len;
+		ifbac.ifbac_buf = inbuf = ninbuf;
+		if (do_cmd(s, BRDGRTS, &ifbac, sizeof(ifbac), 0, br_if->name) < 0) {
+			printf("unable to get address cache\n");
+			return 0;
+		}
+		if ((ifbac.ifbac_len + sizeof(*ifba)) < (unsigned int)len)
+			break;
+		len *= 2;
+	}
+
+	for (i = 0; i < ifbac.ifbac_len / sizeof(*ifba); i++) {
+		ifba = ifbac.ifbac_req + i;
+		memcpy(&ea, ifba->ifba_dst, 6);
+		memcpy(&mac1, &ea, 6);
+		memcpy(ifname, ifba->ifba_ifsname, sizeof(ifba->ifba_ifsname));
+		if (memcmp(mac1.octet, mac.octet, 6) != 0)
+			continue;
+		vid = ifba->ifba_vlan;
+		if (vid == 0)
+			continue;
+		member_ifp = if_lookup_by_name_per_ns(zns, ifname);
+		if (!member_ifp || !member_ifp->info)
+			continue;
+		if (!IS_ZEBRA_IF_BRIDGE_SLAVE(member_ifp))
+			continue;
+		zif = (struct zebra_if *)member_ifp->info;
+		if ((ifp1 = zif->brslave_info.br_if) == NULL) {
+			if (IS_ZEBRA_DEBUG_KERNEL)
+				zlog_debug(
+					"AF_BRIDGE IF %s brIF %u - no bridge master",
+					member_ifp->name,
+					zif->brslave_info.bridge_ifindex);
+			continue;
+		}
+		if (IS_ZEBRA_IF_VXLAN(member_ifp)) {
+			zebra_vxlan_dp_network_mac_add(
+				member_ifp, br_if, &mac, vid, 0, false, false);
+			continue;
+		}
+
+		zebra_vxlan_local_mac_add_update(member_ifp, br_if, &mac, vid,
+				false, false, false);
+	}
+	close(s);
+	free(inbuf);
+	return 0;
+}
+
 #endif
 
 /* Supported address family check. */

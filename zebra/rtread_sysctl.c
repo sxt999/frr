@@ -88,11 +88,17 @@ void macfdb_read(struct zebra_ns *zns)
 void macfdb_read_for_bridge(struct zebra_ns *zns, struct interface *ifp,
 			    struct interface *br_if)
 {
+#ifdef __FreeBSD__
+	ksocket_macfdb_read_for_bridge(zns, ifp, br_if);
+#endif
 }
 
 void macfdb_read_specific_mac(struct zebra_ns *zns, struct interface *br_if,
 			      const struct ethaddr *mac, vlanid_t vid)
 {
+#ifdef __FreeBSD__
+	ksocket_macfdb_read_specific_mac(zns, br_if, mac, vid);
+#endif
 }
 
 void neigh_read(struct zebra_ns *zns)
