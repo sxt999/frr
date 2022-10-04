@@ -485,13 +485,23 @@ void if_flags_update(struct interface *ifp, uint64_t newflags)
 	if (if_is_no_ptm_operative(ifp)) {
 		/* operative -> inoperative? */
 		ifp->flags = newflags;
-		if (!if_is_operative(ifp))
+		if (!if_is_operative(ifp)) {
+#ifdef __FreeBSD__
+			if (IS_ZEBRA_IF_VXLAN(ifp))
+				zebra_vxlan_if_del(ifp);
+#endif
 			if_down(ifp);
+		}
 	} else {
 		/* inoperative -> operative? */
 		ifp->flags = newflags;
-		if (if_is_operative(ifp))
+		if (if_is_operative(ifp)) {
+#ifdef __FreeBSD__
+			if (IS_ZEBRA_IF_VXLAN(ifp))
+				zebra_vxlan_if_add(ifp);
+#endif
 			if_up(ifp);
+		}
 	}
 }
 
