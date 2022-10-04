@@ -647,7 +647,6 @@ int ksocket_macfdb_read_specific_mac(struct zebra_ns *zns, struct interface *br_
 	struct zebra_if *zif;
 	struct zebra_if *zif1;
 	char ifname[20] = {0};
-	vlanid_t vid = 0;
 	int s;
 	if (!mac)
 		return 0;

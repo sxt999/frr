@@ -43,6 +43,8 @@ extern int rtm_write(int, union sockunion *, union sockunion *,
 #ifdef __FreeBSD__
 extern void build_freebsd_bridge_membership(void);
 extern int ksocket_macfdb_read(struct zebra_ns *);
+extern int ksocket_macfdb_read_for_bridge(struct zebra_ns *, struct interface *, struct interface *);
+extern int ksocket_macfdb_read_specific_mac(struct zebra_ns *, struct interface *, const struct ethaddr *, vlanid_t);
 #endif
 extern const struct message rtm_type_str[];
 
