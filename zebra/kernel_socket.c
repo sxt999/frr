@@ -448,6 +448,7 @@ static int bridge_membership_create(struct ns *ns,
 		if (!zif || zif->zif_type != ZEBRA_IF_BRIDGE)
 			continue;
 		bridge_interfaces(s, ifp1, zns);
+		zebra_l2if_update_bridge(ifp1, ZEBRA_BRIDGE_MASTER_UP);
 	}
 	close(s);
 	return NS_WALK_CONTINUE;
