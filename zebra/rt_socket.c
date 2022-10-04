@@ -396,7 +396,7 @@ int kernel_neigh_update(int add, int ifindex, void *addr, char *lla, int llalen,
 }
 
 static int
-do_cmd(int sock, u_long op, void *arg, size_t argsize, int set, char *ifname)
+do_cmd(int sock, u_long op, void *arg, size_t argsize, int set, const char *ifname)
 {
 	struct ifdrv ifd;
 
