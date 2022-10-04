@@ -418,7 +418,7 @@ enum zebra_dplane_result kernel_neigh_update_ctx(struct zebra_dplane_ctx *ctx)
 
 	struct ifvxlancmd cmd;
 	uint8_t mac_addr[ETHER_ADDR_LEN] = {0};
-	struct ipaddr *ip;
+	const struct ipaddr *ip;
 	struct sockaddr_in sa;
 	struct sockaddr_in6 sa6;
 	int s;
