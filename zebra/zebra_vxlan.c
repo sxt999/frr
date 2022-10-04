@@ -990,8 +990,11 @@ static int zevpn_build_hash_table_zns(struct ns *ns,
 				 * Inform BGP if intf is up and mapped to
 				 * bridge.
 				 */
-				if (if_is_operative(ifp) &&
-					zif->brslave_info.br_if)
+				if (if_is_operative(ifp) \
+#ifndef __FreeBSD__
+				&& zif->brslave_info.br_if \
+#endif
+				)
 					zebra_evpn_send_add_to_client(zevpn);
 
 				/* Send Local MAC-entries to client */
@@ -1042,9 +1045,12 @@ static int zevpn_build_hash_table_zns(struct ns *ns,
 				 * Inform BGP if intf is up and mapped to
 				 * bridge.
 				 */
-// #ifndef __FreeBSD__
-				if (if_is_operative(ifp) &&
-					zif->brslave_info.br_if)
+// 
+				if (if_is_operative(ifp) \
+#ifndef __FreeBSD__
+				&& zif->brslave_info.br_if \
+#endif
+				)
 // #endif /* we dont want to map vxlan to bridge sometimes */
 					zebra_evpn_send_add_to_client(zevpn);
 			}
@@ -4855,8 +4861,13 @@ int zebra_vxlan_if_up(struct interface *ifp)
 
 		/* If part of a bridge, inform BGP about this VNI. */
 		/* Also, read and populate local MACs and neighbors. */
+#ifdef __FreeBSD__
+		zebra_evpn_send_add_to_client(zevpn);
+#endif
 		if (zif->brslave_info.br_if) {
+#ifndef __FreeBSD__
 			zebra_evpn_send_add_to_client(zevpn);
+#endif
 			zebra_evpn_read_mac_neigh(zevpn, ifp);
 		}
 	}
