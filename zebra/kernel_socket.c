@@ -1197,6 +1197,12 @@ int ifm_read(struct if_msghdr *ifm)
 
 		/* update flags and handle operative->inoperative transition, if
 		 * any */
+#ifdef __FreeBSD__
+		s = socket(AF_LOCAL, SOCK_DGRAM, 0);
+		vxlan_status(s, ifp);
+		bridge_status(s, ifp);
+		close(s);
+#endif /* get vtep information */
 		if_flags_update(ifp, ifm->ifm_flags);
 
 #ifndef RTM_IFANNOUNCE
@@ -1222,12 +1228,6 @@ int ifm_read(struct if_msghdr *ifm)
 			if_get_mtu(ifp);
 #endif /* __bsdi__ */
 			if_get_metric(ifp);
-#ifdef __FreeBSD__
-		s = socket(AF_LOCAL, SOCK_DGRAM, 0);
-		vxlan_status(s, ifp);
-		bridge_status(s, ifp);
-		close(s);
-#endif /* get vtep information */
 		}
 	}
 
