@@ -4849,7 +4849,8 @@ int zebra_vxlan_if_up(struct interface *ifp)
 			zlog_debug(
 				"Failed to locate EVPN hash at UP, IF %s(%u) VNI %u",
 				ifp->name, ifp->ifindex, vni);
-			return -1;
+			zevpn_build_hash_table();
+			return 0;
 		}
 
 		assert(zevpn->vxlan_if == ifp);
