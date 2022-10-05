@@ -1814,7 +1814,7 @@ static size_t rta_getsdlmac(caddr_t sap, void *destp, short *destlen, uint16_t *
 	if (copylen > 0 && dest != NULL && sdl->sdl_family == AF_LINK) {
 		memcpy(dest, LLADDR(sdl), copylen);
 		memcpy(vid, sdl->sdl_data, sdl->sdl_nlen);
-		dest[copylen] = 0;
+		// dest[copylen] = 0;
 		*destlen = sdl->sdl_index;
 	}
 	return tlen;
