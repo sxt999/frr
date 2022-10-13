@@ -75,8 +75,10 @@
 #include <net/if.h>
 #include <sys/ioctl.h>
 #include <arpa/inet.h>
+#ifndef __FreeBSD__
 #include <linux/sockios.h>
 #include <linux/ethtool.h>
+#endif
 
 /* All information about zebra. */
 struct zclient *zclient = NULL;
