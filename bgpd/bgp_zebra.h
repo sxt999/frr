@@ -33,6 +33,16 @@
 /* Default weight for next hop, if doing weighted ECMP. */
 #define BGP_ZEBRA_DEFAULT_NHOP_WEIGHT 1
 
+struct ifinfo_hook {
+    unsigned int if_idx;    //接口索引号
+    char if_name[32];       //接口名 如：eth0
+    char if_ipv4[16];       //接口IPv4地址
+};
+
+int is_ip_private(char *ip);
+struct in_addr vtep_ip_hook(struct in_addr ip_to_check);
+struct in_addr vtep_file_hook(struct in_addr ip_to_check);
+
 extern void bgp_zebra_init(struct thread_master *master,
 			   unsigned short instance);
 extern void bgp_zebra_init_tm_connect(struct bgp *bgp);

@@ -68,6 +68,16 @@
 #include "bgpd/bgp_community.h"
 #include "bgpd/bgp_lcommunity.h"
 
+#include <string.h>
+#include <unistd.h>
+#include <stdio.h>
+#include <netinet/in.h> 
+#include <net/if.h>
+#include <sys/ioctl.h>
+#include <arpa/inet.h>
+#include <linux/sockios.h>
+#include <linux/ethtool.h>
+
 /* All information about zebra. */
 struct zclient *zclient = NULL;
 
@@ -2909,6 +2919,122 @@ static int bgp_zebra_process_local_l3vni(ZAPI_CALLBACK_ARGS)
 	return 0;
 }
 
+int is_ip_private(char *ip)
+{
+    char type_1[8] = {""};
+    char type_2[4] = {""};
+    char type_3[4] = {""};
+    strncpy(type_1, ip, 7);
+    strncpy(type_2, ip, 3);
+    strncpy(type_3, ip, 4);
+    const char *type1_ip = "192.168";
+    const char *type2_ip = "10.";
+    const char *type3_ip = "172.";
+    if(strcmp(type1_ip, type_1) == 0){
+        return 1;
+    }
+    if(strcmp(type2_ip, type_2) == 0){
+        return 1;
+    }
+    if(strcmp(type3_ip, type_3) == 0){
+        return 1;
+    }
+    return 0;
+}
+
+struct in_addr vtep_ip_hook(struct in_addr ip_to_check)
+{
+    struct ifconf ifconf;
+    struct ifinfo_hook info[128];
+    struct ifreq ifreqs[128];
+    char if_ipv4[16];
+    int target_ifid = -1;
+    struct in_addr ret = ip_to_check;
+    int err = 0;
+    memset(&ifconf, 0, sizeof(ifconf));
+    memset(&info, 0, sizeof(info));
+    ifconf.ifc_req = ifreqs;
+    ifconf.ifc_len = sizeof(ifreqs);
+    
+    int sock = socket(AF_INET, SOCK_DGRAM, IPPROTO_IP);
+
+    if(sock < 0) {
+        return ret;
+    }
+
+    int r = ioctl(sock, SIOCGIFCONF, (char *)&ifconf);
+    if(r != 0) {
+        return ret;
+    }
+    unsigned int i;
+    for(i = 0; i < ifconf.ifc_len/sizeof(struct ifreq); ++i)
+    {
+        snprintf(info[i].if_ipv4, sizeof(info[i].if_ipv4),"%s",
+                        inet_ntoa(((struct sockaddr_in*)&(ifreqs[i].ifr_addr))->sin_addr));
+        strcpy(info[i].if_name, ifreqs[i].ifr_name);
+        info[i].if_idx = if_nametoindex(info[i].if_name);
+        
+    }
+
+    snprintf(if_ipv4, sizeof(if_ipv4), "%s", inet_ntoa(ip_to_check));
+    for(i = 0; i < ifconf.ifc_len/sizeof(struct ifreq); ++i)
+    {
+        if(strcmp(info[i].if_ipv4, if_ipv4) == 0) {
+            target_ifid = info[i].if_idx;
+            break;
+        }
+    }
+    if(target_ifid == -1) {
+        return ret;
+    }
+    for(i = 0; i < ifconf.ifc_len/sizeof(struct ifreq); ++i)
+    {
+        if(info[i].if_idx == (unsigned int)target_ifid) {
+            if(is_ip_private(info[i].if_ipv4) == 0) {
+                err = inet_aton(info[i].if_ipv4, &ret);
+                if(err == 0) {
+                    ret = ip_to_check;
+                }
+                break;
+            }
+        }
+    }
+
+    close(sock);
+    return ret;
+}
+
+struct in_addr vtep_file_hook(struct in_addr ip_to_check)
+{
+	char file_name[28] = "/var/run/frr/vtep_";
+	char if_ipv4[16];
+	char buf[80];
+	struct in_addr ret = ip_to_check;
+	int err = 0;
+	snprintf(if_ipv4, sizeof(if_ipv4), "%s", inet_ntoa(ip_to_check));
+	strcat(file_name, if_ipv4);
+	if(access(file_name, F_OK) != 0){
+		return ret;
+	}
+	FILE *fp = fopen(file_name, "r");
+	if(!fp){
+		return ret;
+	}
+	while(fscanf(fp, "%s", buf))
+	{
+		if(feof(fp))
+		{
+			break;
+		}
+	}
+	fclose(fp);
+	err = inet_aton(buf, &ret);
+	if(err == 0){
+		ret = ip_to_check;
+	}
+	return ret;
+}
+
 static int bgp_zebra_process_local_vni(ZAPI_CALLBACK_ARGS)
 {
 	struct stream *s;
@@ -2942,7 +3068,9 @@ static int bgp_zebra_process_local_vni(ZAPI_CALLBACK_ARGS)
 	if (cmd == ZEBRA_VNI_ADD) {
 		frrtrace(4, frr_bgp, evpn_local_vni_add_zrecv, vni, vtep_ip,
 			 tenant_vrf_id, mcast_grp);
-
+		// HOOK
+		vtep_ip = vtep_ip_hook(vtep_ip);
+		vtep_ip = vtep_file_hook(vtep_ip);
 		return bgp_evpn_local_vni_add(
 			bgp, vni,
 			vtep_ip.s_addr != INADDR_ANY ? vtep_ip : bgp->router_id,
